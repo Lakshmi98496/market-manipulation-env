@@ -1,0 +1,139 @@
+"""
+Session Manager
+===============
+Replaces the dangerous module-level global _episode with a proper
+per-session state store keyed by session_id.
+
+The hackathon harness (Phase 2) runs multiple concurrent episodes —
+one per agent instance. A global state object causes all sessions to
+share and overwrite each other's episode data, producing silent
+wrong scores.
+
+This module provides thread-safe, per-session isolation.
+"""
+from __future__ import annotations
+
+import threading
+import time
+import uuid
+from typing import Dict, List, Optional
+
+from server.simulator import OrderBookSimulator
+from server.reward import compute_episode_score
+
+
+TASKS = {
+    "spoofing_detection": {
+        "difficulty": "easy",
+        "max_steps": 15,
+        "description": "Detect single-pattern spoofing in a clean order book.",
+    },
+    "layering_wash_detection": {
+        "difficulty": "medium",
+        "max_steps": 20,
+        "description": "Identify layering and wash trading mixed with HFT noise.",
+    },
+    "adaptive_adversary_detection": {
+        "difficulty": "hard",
+        "max_steps": 25,
+        "description": "Track an adaptive manipulator through a regime shift.",
+    },
+}
+
+DEFAULT_TASK = "spoofing_detection"
+SESSION_TTL_SECONDS = 3600  # clean up stale sessions after 1 hour
+
+
+class EpisodeSession:
+    """Isolated state for a single agent episode."""
+
+    def __init__(self, session_id: str):
+        self.session_id = session_id
+        self.task_name: str = DEFAULT_TASK
+        self.simulator: Optional[OrderBookSimulator] = None
+        self.step_count: int = 0
+        self.max_steps: int = 15
+        self.rewards: List[float] = []
+        self.decisions: List[str] = []
+        self.true_patterns: List[str] = []
+        self.done: bool = False
+        self.seed: int = 42
+        self.started_at: float = time.time()
+        self.last_active: float = time.time()
+
+    def reset(self, task_name: str, seed: int) -> None:
+        self.task_name = task_name
+        self.seed = seed
+        self.max_steps = TASKS[task_name]["max_steps"]
+        self.simulator = OrderBookSimulator(task_name=task_name, seed=seed)
+        self.step_count = 0
+        self.rewards = []
+        self.decisions = []
+        self.true_patterns = []
+        self.done = False
+        self.started_at = time.time()
+        self.last_active = time.time()
+
+    def touch(self) -> None:
+        self.last_active = time.time()
+
+    def is_stale(self) -> bool:
+        return (time.time() - self.last_active) > SESSION_TTL_SECONDS
+
+    @property
+    def episode_score(self) -> float:
+        return compute_episode_score(self.rewards)
+
+
+class SessionStore:
+    """
+    Thread-safe store of active EpisodeSessions.
+
+    Each HTTP request carries a session_id header (or cookie).
+    If absent, a new session is created automatically — this keeps
+    backward compatibility with the single-agent validation script.
+    """
+
+    def __init__(self):
+        self._sessions: Dict[str, EpisodeSession] = {}
+        self._lock = threading.Lock()
+
+    def get_or_create(self, session_id: Optional[str] = None) -> EpisodeSession:
+        with self._lock:
+            if session_id and session_id in self._sessions:
+                session = self._sessions[session_id]
+                session.touch()
+                return session
+            # Create new session
+            new_id = session_id or str(uuid.uuid4())
+            session = EpisodeSession(new_id)
+            self._sessions[new_id] = session
+            return session
+
+    def get(self, session_id: str) -> Optional[EpisodeSession]:
+        with self._lock:
+            s = self._sessions.get(session_id)
+            if s:
+                s.touch()
+            return s
+
+    def delete(self, session_id: str) -> None:
+        with self._lock:
+            self._sessions.pop(session_id, None)
+
+    def cleanup_stale(self) -> int:
+        """Remove sessions inactive for SESSION_TTL_SECONDS. Returns count removed."""
+        with self._lock:
+            stale = [sid for sid, s in self._sessions.items() if s.is_stale()]
+            for sid in stale:
+                del self._sessions[sid]
+            return len(stale)
+
+    @property
+    def active_count(self) -> int:
+        with self._lock:
+            return len(self._sessions)
+
+
+# Module-level singleton — one store for the whole server process
+store = SessionStore()

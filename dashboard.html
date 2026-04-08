@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Market Manipulation Detection</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;background:#f0f4f8;color:#1e293b;min-height:100vh;font-size:14px}
+
+/* TOP BAR */
+.topbar{background:#fff;border-bottom:2px solid #e2e8f0;padding:16px 28px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 1px 4px rgba(0,0,0,0.06)}
+.logo{display:flex;align-items:center;gap:12px}
+.logo-icon{width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#2563eb,#7c3aed);display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 2px 8px rgba(37,99,235,0.3)}
+.logo h1{font-size:17px;font-weight:700;color:#0f172a}
+.logo p{font-size:11px;color:#94a3b8;margin-top:1px}
+.server-pill{display:flex;align-items:center;gap:8px;background:#f8fafc;border:1px solid #e2e8f0;padding:7px 14px;border-radius:20px;font-size:12px;color:#64748b}
+.dot{width:8px;height:8px;border-radius:50%;background:#22c55e;animation:blink 2s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+
+/* LAYOUT */
+.page{max-width:1080px;margin:0 auto;padding:24px 20px;display:flex;flex-direction:column;gap:20px}
+
+/* SECTION LABEL */
+.sec-label{font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:12px}
+
+/* CARD */
+.card{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:22px;box-shadow:0 1px 4px rgba(0,0,0,0.05)}
+
+/* HOW IT WORKS */
+.how-row{display:grid;grid-template-columns:repeat(5,1fr);gap:0}
+.how-step{padding:14px 10px;text-align:center;border:1px solid #e2e8f0;background:#f8fafc;position:relative}
+.how-step:first-child{border-radius:10px 0 0 10px}
+.how-step:last-child{border-radius:0 10px 10px 0}
+.how-step.active{background:#eff6ff;border-color:#bfdbfe}
+.how-num{font-size:10px;color:#94a3b8;margin-bottom:4px;font-weight:600}
+.how-title{font-size:12px;font-weight:700;color:#1e293b}
+.how-desc{font-size:10px;color:#94a3b8;margin-top:3px}
+.how-arrow{position:absolute;right:-8px;top:50%;transform:translateY(-50%);color:#cbd5e1;font-size:14px;z-index:1}
+
+/* TASK CARDS */
+.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px}
+.task-card{padding:16px;border:2px solid #e2e8f0;border-radius:12px;cursor:pointer;transition:all 0.2s;background:#f8fafc}
+.task-card:hover{border-color:#93c5fd;background:#eff6ff;transform:translateY(-1px)}
+.task-card.selected{border-color:#2563eb;background:#eff6ff;box-shadow:0 0 0 3px rgba(37,99,235,0.1)}
+.task-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
+.task-name{font-size:13px;font-weight:700;color:#0f172a}
+.diff-badge{font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;flex-shrink:0;margin-left:6px}
+.easy{background:#dcfce7;color:#15803d}
+.medium{background:#fef3c7;color:#b45309}
+.hard{background:#fee2e2;color:#b91c1c}
+.task-desc{font-size:11px;color:#64748b;line-height:1.6}
+
+/* START BUTTON */
+.btn-start{width:100%;padding:13px;border-radius:10px;border:none;cursor:pointer;font-size:14px;font-weight:700;font-family:'Inter',sans-serif;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;transition:all 0.2s;box-shadow:0 2px 8px rgba(37,99,235,0.3)}
+.btn-start:hover{background:linear-gradient(135deg,#3b82f6,#2563eb);transform:translateY(-1px);box-shadow:0 4px 12px rgba(37,99,235,0.4)}
+.btn-start:disabled{background:#e2e8f0;color:#94a3b8;cursor:not-allowed;transform:none;box-shadow:none}
+
+/* TWO COL */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+
+/* ORDER BOOK */
+.ob-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ob-side{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px}
+.ob-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px}
+.ob-bid{color:#16a34a}
+.ob-ask{color:#dc2626}
+.ob-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #e2e8f0;font-family:'JetBrains Mono',monospace;font-size:12px}
+.ob-row:last-child{border-bottom:none}
+.bid-p{color:#16a34a;font-weight:600}
+.ask-p{color:#dc2626;font-weight:600}
+.ob-sz{color:#94a3b8;font-size:11px}
+
+/* SIGNALS */
+.sig-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid #f1f5f9}
+.sig-row:last-child{border-bottom:none}
+.sig-name{font-size:12px;color:#64748b}
+.sig-val{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700}
+.vg{color:#16a34a}
+.vr{color:#dc2626}
+.va{color:#d97706}
+.vb{color:#2563eb}
+.vd{color:#0f172a}
+
+/* ALERTS */
+.alert{padding:10px 14px;border-radius:8px;font-size:12px;font-weight:500;margin-bottom:8px;display:flex;align-items:flex-start;gap:8px;line-height:1.6}
+.al-danger{background:#fef2f2;border:1px solid #fecaca;color:#b91c1c}
+.al-warn{background:#fffbeb;border:1px solid #fde68a;color:#b45309}
+.al-ok{background:#f0fdf4;border:1px solid #bbf7d0;color:#15803d}
+
+/* NARRATIVE */
+.narrative{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#475569;line-height:2;white-space:pre-wrap;max-height:250px;overflow-y:auto}
+.nh{color:#2563eb;font-weight:600}
+.nw{color:#d97706;font-weight:500}
+.nd{color:#dc2626;font-weight:500}
+.no{color:#16a34a;font-weight:500}
+
+/* DECISION */
+.dec-explain{background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:14px;margin-bottom:16px}
+.dec-explain p{font-size:13px;color:#1e40af;line-height:1.7}
+.dec-explain strong{color:#1e3a8a}
+
+.dec-btns{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px}
+.dec-btn{padding:18px 10px;border-radius:12px;border:2px solid #e2e8f0;background:#f8fafc;cursor:pointer;font-family:'Inter',sans-serif;font-size:13px;font-weight:700;text-align:center;transition:all 0.2s;color:#64748b}
+.dec-btn:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,0.1)}
+.dec-icon{font-size:26px;margin-bottom:8px}
+.dec-name{display:block;margin-bottom:4px;font-size:14px}
+.dec-hint{font-size:10px;font-weight:400;color:#94a3b8;line-height:1.5;display:block}
+.di.sel{border-color:#16a34a;background:#f0fdf4;color:#15803d;box-shadow:0 0 0 3px rgba(22,163,74,0.1)}
+.ds.sel{border-color:#d97706;background:#fffbeb;color:#b45309;box-shadow:0 0 0 3px rgba(217,119,6,0.1)}
+.de.sel{border-color:#dc2626;background:#fef2f2;color:#b91c1c;box-shadow:0 0 0 3px rgba(220,38,38,0.1)}
+.di:hover{border-color:#16a34a}
+.ds:hover{border-color:#d97706}
+.de:hover{border-color:#dc2626}
+
+/* FORM */
+.form-label{font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:7px}
+.styled-sel{width:100%;background:#fff;border:1px solid #e2e8f0;color:#1e293b;padding:10px 12px;border-radius:8px;font-size:13px;font-family:'Inter',sans-serif;margin-bottom:16px;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,0.05)}
+.styled-sel:focus{outline:none;border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,0.1)}
+.conf-row{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.conf-row input[type=range]{flex:1;-webkit-appearance:none;height:6px;border-radius:3px;background:#e2e8f0;cursor:pointer}
+.conf-row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:#2563eb;cursor:pointer;box-shadow:0 1px 4px rgba(37,99,235,0.4)}
+.conf-val{font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;color:#2563eb;width:44px;text-align:right}
+
+/* SUBMIT */
+.btn-submit{width:100%;padding:14px;border-radius:10px;border:none;cursor:pointer;font-size:14px;font-weight:700;font-family:'Inter',sans-serif;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;transition:all 0.2s;box-shadow:0 2px 8px rgba(124,58,237,0.3)}
+.btn-submit:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(124,58,237,0.4)}
+.btn-submit:disabled{background:#e2e8f0;color:#94a3b8;cursor:not-allowed;transform:none;box-shadow:none}
+
+/* SCORE */
+.score-top{display:flex;justify-content:space-between;font-size:12px;color:#64748b;margin-bottom:6px}
+.score-track{background:#e2e8f0;border-radius:6px;height:10px}
+.score-fill{height:10px;border-radius:6px;background:linear-gradient(90deg,#2563eb,#06b6d4);transition:width 0.6s cubic-bezier(0.4,0,0.2,1)}
+.metric-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.metric-box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px}
+.metric-lbl{font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:5px}
+.metric-v{font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace}
+
+/* GUIDE */
+.guide-box{padding:12px 14px;border-radius:10px;margin-bottom:10px}
+.guide-box:last-child{margin-bottom:0}
+.g-escalate{background:#fef2f2;border:1px solid #fecaca}
+.g-soft{background:#fffbeb;border:1px solid #fde68a}
+.g-ignore{background:#f0fdf4;border:1px solid #bbf7d0}
+.guide-title{font-size:12px;font-weight:700;margin-bottom:5px}
+.guide-text{font-size:11px;color:#64748b;line-height:1.7}
+
+/* HISTORY */
+.hist-list{display:flex;flex-direction:column;gap:8px;max-height:320px;overflow-y:auto}
+.hist-item{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;border-left:4px solid #e2e8f0;animation:slideIn 0.3s ease}
+@keyframes slideIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+.hist-item.correct{border-left-color:#16a34a;background:#f0fdf4}
+.hist-item.partial{border-left-color:#d97706;background:#fffbeb}
+.hist-item.wrong{border-left-color:#dc2626;background:#fef2f2}
+.hist-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:7px}
+.hist-step{font-weight:700;color:#2563eb;font-family:'JetBrains Mono',monospace;font-size:13px}
+.hist-rwd{font-size:12px;font-weight:700;padding:3px 10px;border-radius:6px;font-family:'JetBrains Mono',monospace}
+.rg{background:#dcfce7;color:#15803d}
+.rm{background:#fef3c7;color:#b45309}
+.rr{background:#fee2e2;color:#b91c1c}
+.hist-detail{font-size:11px;color:#64748b;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.htag{background:#e2e8f0;color:#475569;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:500}
+.ct{color:#15803d;font-weight:700}
+.wt{color:#b91c1c;font-weight:700}
+
+/* EMPTY */
+.empty{text-align:center;padding:32px;color:#cbd5e1;font-size:13px}
+.empty-icon{font-size:32px;margin-bottom:8px;opacity:0.5}
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-icon">🔍</div>
+    <div>
+      <h1>Market Manipulation Detection</h1>
+      <p>OpenEnv RL Environment · Meta × HuggingFace Hackathon</p>
+    </div>
+  </div>
+  <div class="server-pill">
+    <span class="dot" id="dot"></span>
+    <span id="server-txt">Checking server...</span>
+  </div>
+</div>
+
+<div class="page">
+
+  <!-- HOW IT WORKS -->
+  <div>
+    <div class="sec-label">How it works — follow these 5 steps</div>
+    <div class="how-row">
+      <div class="how-step active" id="hw1">
+        <div class="how-num">Step 1</div>
+        <div class="how-title">Pick Task</div>
+        <div class="how-desc">Choose difficulty</div>
+        <span class="how-arrow">›</span>
+      </div>
+      <div class="how-step" id="hw2">
+        <div class="how-num">Step 2</div>
+        <div class="how-title">Start Episode</div>
+        <div class="how-desc">Load market data</div>
+        <span class="how-arrow">›</span>
+      </div>
+      <div class="how-step" id="hw3">
+        <div class="how-num">Step 3</div>
+        <div class="how-title">Read Data</div>
+        <div class="how-desc">Order book + signals</div>
+        <span class="how-arrow">›</span>
+      </div>
+      <div class="how-step" id="hw4">
+        <div class="how-num">Step 4</div>
+        <div class="how-title">Decide</div>
+        <div class="how-desc">Ignore / Flag / Escalate</div>
+        <span class="how-arrow">›</span>
+      </div>
+      <div class="how-step" id="hw5">
+        <div class="how-num">Step 5</div>
+        <div class="how-title">See Result</div>
+        <div class="how-desc">Score updates</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 1 — TASK SELECTION -->
+  <div class="card">
+    <div class="sec-label">Step 1 — Pick your task (beginners start with Easy)</div>
+    <div class="three-col">
+      <div class="task-card selected" onclick="pickTask('spoofing_detection',this)">
+        <div class="task-top">
+          <span class="task-name">🎯 Spoofing Detection</span>
+          <span class="diff-badge easy">Easy · 15 steps</span>
+        </div>
+        <div class="task-desc">A criminal places huge fake buy/sell orders to move the price, then cancels before anyone fills them. Catch them!</div>
+      </div>
+      <div class="task-card" onclick="pickTask('layering_wash_detection',this)">
+        <div class="task-top">
+          <span class="task-name">⚡ Layering + Wash Trading</span>
+          <span class="diff-badge medium">Medium · 20 steps</span>
+        </div>
+        <div class="task-desc">Two crimes mixed with real market noise. Stacked fake orders AND self-trading to create fake volume.</div>
+      </div>
+      <div class="task-card" onclick="pickTask('adaptive_adversary_detection',this)">
+        <div class="task-top">
+          <span class="task-name">🔥 Adaptive Adversary</span>
+          <span class="diff-badge hard">Hard · 25 steps</span>
+        </div>
+        <div class="task-desc">The criminal changes strategy based on your decisions. Market also shifts mid-episode. Uses real LOB data.</div>
+      </div>
+    </div>
+    <button class="btn-start" onclick="startEpisode()" id="start-btn">▶ Start Episode</button>
+  </div>
+
+  <!-- STEP 2 — MARKET DATA -->
+  <div class="two-col">
+    <div class="card">
+      <div class="sec-label">Step 3A — Live Order Book</div>
+      <div id="ob-area"><div class="empty"><div class="empty-icon">📊</div>Start an episode to see the live order book</div></div>
+    </div>
+    <div class="card">
+      <div class="sec-label">Step 3B — Market Signals</div>
+      <div id="sig-area"><div class="empty"><div class="empty-icon">📡</div>Signals appear after you start</div></div>
+    </div>
+  </div>
+
+  <!-- ANALYST BRIEF -->
+  <div class="card">
+    <div class="sec-label">Step 3C — Analyst Brief (read this to decide what to do)</div>
+    <div class="narrative" id="narrative">Waiting for episode to start...
+
+Once you click Start Episode, this box will show a detailed
+plain-English summary of what the market looks like right now.
+
+Look for lines starting with:
+  ⚠  = Warning — something suspicious
+  ✓  = Normal — market looks clean
+
+Use what you read here to make your decision below.</div>
+  </div>
+
+  <!-- STEP 3 — DECISION -->
+  <div class="card">
+    <div class="sec-label">Step 4 — Make your decision based on what you read above</div>
+
+    <div class="dec-explain">
+      <p>
+        Look at the analyst brief above. What do you think is happening?<br>
+        <strong>See fake orders being cancelled?</strong> → Escalate (Spoofing)<br>
+        <strong>See same buy/sell pairs repeating?</strong> → Soft Flag (Wash Trading)<br>
+        <strong>Everything looks normal?</strong> → Ignore
+      </p>
+    </div>
+
+    <div class="dec-btns">
+      <button class="dec-btn di" onclick="pickDec('ignore',this)" id="dec-i">
+        <div class="dec-icon">✅</div>
+        <span class="dec-name">IGNORE</span>
+        <span class="dec-hint">Market is clean.<br>No action needed.</span>
+      </button>
+      <button class="dec-btn ds" onclick="pickDec('soft_flag',this)" id="dec-s">
+        <div class="dec-icon">🚩</div>
+        <span class="dec-name">SOFT FLAG</span>
+        <span class="dec-hint">Suspicious activity.<br>Use for wash trading.</span>
+      </button>
+      <button class="dec-btn de sel" onclick="pickDec('escalate',this)" id="dec-e">
+        <div class="dec-icon">🚨</div>
+        <span class="dec-name">ESCALATE</span>
+        <span class="dec-hint">Clear crime detected!<br>Alert regulators now.</span>
+      </button>
+    </div>
+
+    <div class="two-col">
+      <div>
+        <div class="form-label">Which pattern do you think you see?</div>
+        <select class="styled-sel" id="pat-sel">
+          <option value="none">None — market looks clean</option>
+          <option value="spoofing" selected>Spoofing — fake large orders then cancelled</option>
+          <option value="layering">Layering — orders stacked on one side</option>
+          <option value="wash_trading">Wash Trading — same buy/sell pairs</option>
+        </select>
+      </div>
+      <div>
+        <div class="form-label">How confident are you? (higher confidence = bigger reward or penalty)</div>
+        <div class="conf-row">
+          <input type="range" min="0" max="100" value="80" id="conf-sl"
+                 oninput="document.getElementById('conf-v').textContent=this.value+'%'">
+          <span class="conf-val" id="conf-v">80%</span>
+        </div>
+        <button class="btn-submit" onclick="submitStep()" id="sub-btn" disabled>Submit My Decision →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCORE + GUIDE -->
+  <div class="two-col">
+
+    <div class="card">
+      <div class="sec-label">Step 5 — Your score this episode</div>
+      <div>
+        <div class="score-top">
+          <span>Average score (0 = bad, 1 = perfect)</span>
+          <span id="score-num" style="font-weight:700;color:#2563eb">0.0000</span>
+        </div>
+        <div class="score-track">
+          <div class="score-fill" id="score-bar" style="width:0%"></div>
+        </div>
+      </div>
+      <div class="metric-grid">
+        <div class="metric-box">
+          <div class="metric-lbl">Current Step</div>
+          <div class="metric-v vb" id="m-step">0</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-lbl">Last Reward</div>
+          <div class="metric-v" id="m-rwd">—</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-lbl">Avg Score</div>
+          <div class="metric-v" id="m-avg">—</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-lbl">True Pattern</div>
+          <div class="metric-v" id="m-true" style="font-size:14px">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="sec-label">Quick cheat sheet</div>
+      <div class="guide-box g-escalate">
+        <div class="guide-title" style="color:#b91c1c">🚨 ESCALATE if you see:</div>
+        <div class="guide-text">
+          • Cancel rate &gt; 35% AND strong imbalance → <strong>Spoofing</strong><br>
+          • Huge single order far from market price → <strong>Spoofing</strong><br>
+          • Many uniform-sized orders stacked → <strong>Layering</strong>
+        </div>
+      </div>
+      <div class="guide-box g-soft">
+        <div class="guide-title" style="color:#b45309">🚩 SOFT FLAG if you see:</div>
+        <div class="guide-text">
+          • Same price + same size trades repeating → <strong>Wash Trading</strong>
+        </div>
+      </div>
+      <div class="guide-box g-ignore">
+        <div class="guide-title" style="color:#15803d">✅ IGNORE if you see:</div>
+        <div class="guide-text">
+          • No warnings in the analyst brief<br>
+          • Balanced order book, low cancel rate
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- HISTORY -->
+  <div class="card">
+    <div class="sec-label">Decision History — green = correct, red = wrong</div>
+    <div class="hist-list" id="hist-list">
+      <div class="empty"><div class="empty-icon">🕐</div>Your decisions will show here after each step</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const BASE='http://localhost:7860';
+let sid=null,dec='escalate',task='spoofing_detection';
+let step=0,maxSteps=15,total=0,active=false;
+
+async function api(path,method='GET',body=null){
+  const h={'Content-Type':'application/json'};
+  if(sid)h['X-Session-ID']=sid;
+  const o={method,headers:h};
+  if(body)o.body=JSON.stringify(body);
+  const r=await fetch(BASE+path,o);
+  if(!r.ok)throw new Error(r.status);
+  return r.json();
+}
+
+async function checkServer(){
+  try{
+    await api('/health');
+    document.getElementById('dot').style.background='#22c55e';
+    document.getElementById('server-txt').textContent='Server Online ✓';
+  }catch{
+    document.getElementById('dot').style.background='#ef4444';
+    document.getElementById('server-txt').textContent='Server Offline — run uvicorn first';
+  }
+}
+
+function hw(n){document.querySelectorAll('.how-step').forEach((b,i)=>b.classList.toggle('active',i===n-1))}
+
+function pickTask(t,el){
+  task=t;
+  document.querySelectorAll('.task-card').forEach(c=>c.classList.remove('selected'));
+  el.classList.add('selected');
+  hw(1);
+}
+
+function pickDec(d,el){
+  dec=d;
+  document.querySelectorAll('.dec-btn').forEach(b=>b.classList.remove('sel'));
+  el.classList.add('sel');
+}
+
+async function startEpisode(){
+  const btn=document.getElementById('start-btn');
+  btn.disabled=true;btn.textContent='Starting...';
+  try{
+    const r=await api('/reset','POST',{task});
+    sid=r.session_id;step=0;maxSteps=r.info.max_steps;total=0;active=true;
+    document.getElementById('sub-btn').disabled=false;
+    document.getElementById('hist-list').innerHTML='<div class="empty"><div class="empty-icon">▶</div>Episode started! Read the analyst brief above, then make your first decision.</div>';
+    document.getElementById('m-step').textContent='0/'+maxSteps;
+    document.getElementById('score-bar').style.width='0%';
+    document.getElementById('score-num').textContent='0.0000';
+    hw(3);
+    updateObs(r.observation);
+    updateNarrative(r.observation.context_hint);
+  }catch(e){
+    alert('Cannot connect!\n\nRun this in VS Code terminal first:\npython -m uvicorn server.env:app --host 0.0.0.0 --port 7860 --reload');
+  }
+  btn.disabled=false;btn.textContent='▶ Restart Episode';
+}
+
+async function submitStep(){
+  if(!sid||!active)return;
+  const conf=parseInt(document.getElementById('conf-sl').value)/100;
+  const pat=document.getElementById('pat-sel').value;
+  const btn=document.getElementById('sub-btn');
+  btn.disabled=true;btn.textContent='Submitting...';
+  try{
+    const r=await api('/step','POST',{action:{decision:dec,pattern_type:pat,confidence:conf}});
+    step++;total+=r.reward;
+    const avg=total/step;
+    const tp=r.true_pattern||'none';
+
+    document.getElementById('m-step').textContent=step+'/'+maxSteps;
+
+    const rEl=document.getElementById('m-rwd');
+    rEl.textContent=r.reward.toFixed(4);
+    rEl.className='metric-v '+(r.reward>=0.6?'vg':r.reward>=0.2?'va':'vr');
+
+    const aEl=document.getElementById('m-avg');
+    aEl.textContent=avg.toFixed(4);
+    aEl.className='metric-v '+(avg>=0.5?'vg':avg>=0.3?'va':'vr');
+
+    const tEl=document.getElementById('m-true');
+    tEl.textContent=tp.toUpperCase();
+    tEl.className='metric-v '+(tp==='none'?'vg':'vr');
+
+    document.getElementById('score-num').textContent=avg.toFixed(4);
+    document.getElementById('score-bar').style.width=Math.min(avg*100,100)+'%';
+
+    updateObs(r.observation);
+    updateNarrative(r.observation.context_hint);
+    addHist(step,dec,pat,conf,r.reward,tp);
+    hw(4);
+
+    if(r.done){
+      active=false;
+      btn.textContent='Episode Done! Press Restart Episode to play again.';
+      hw(5);
+      return;
+    }
+  }catch(e){console.error(e);}
+  btn.disabled=false;btn.textContent='Submit My Decision →';
+}
+
+function updateObs(obs){
+  if(!obs)return;
+  const bids=(obs.bid_levels||[]).filter(b=>b.tick===0).slice(0,5);
+  const asks=(obs.ask_levels||[]).filter(a=>a.tick===0).slice(0,5);
+  const rb=bids.length?bids:(obs.bid_levels||[]).slice(0,5);
+  const ra=asks.length?asks:(obs.ask_levels||[]).slice(0,5);
+
+  document.getElementById('ob-area').innerHTML=`
+    <div class="ob-grid">
+      <div class="ob-side">
+        <div class="ob-title ob-bid">BUY Orders (Bids)</div>
+        ${rb.map(b=>`<div class="ob-row"><span class="bid-p">$${parseFloat(b.price).toFixed(2)}</span><span class="ob-sz">${parseFloat(b.size).toFixed(0)} units</span></div>`).join('')}
+      </div>
+      <div class="ob-side">
+        <div class="ob-title ob-ask">SELL Orders (Asks)</div>
+        ${ra.map(a=>`<div class="ob-row"><span class="ask-p">$${parseFloat(a.price).toFixed(2)}</span><span class="ob-sz">${parseFloat(a.size).toFixed(0)} units</span></div>`).join('')}
+      </div>
+    </div>`;
+
+  const imb=parseFloat(obs.order_imbalance||0);
+  const cr=parseFloat(obs.cancel_rate||0);
+  const spread=parseFloat(obs.spread||0);
+  const mid=parseFloat(obs.mid_price||0);
+
+  let alerts='';
+  if(Math.abs(imb)>0.4)alerts+=`<div class="alert al-danger">⚠ Strong ${imb>0?'buy':'sell'}-side pressure (${imb.toFixed(3)}) — possible manipulation</div>`;
+  if(cr>0.35)alerts+=`<div class="alert al-warn">⚠ High cancel rate ${(cr*100).toFixed(0)}% — orders placed then quickly cancelled</div>`;
+  if(Math.abs(imb)<=0.2&&cr<=0.2)alerts+=`<div class="alert al-ok">✓ Market signals look normal — no obvious manipulation detected</div>`;
+
+  document.getElementById('sig-area').innerHTML=alerts+`
+    <div class="sig-row"><span class="sig-name">Current stock price (Mid)</span><span class="sig-val vd">$${mid.toFixed(2)}</span></div>
+    <div class="sig-row"><span class="sig-name">Bid-ask spread</span><span class="sig-val vd">$${spread.toFixed(4)}</span></div>
+    <div class="sig-row"><span class="sig-name">Order imbalance (buy vs sell)</span><span class="sig-val ${Math.abs(imb)>0.4?'vr':'vg'}">${imb>=0?'+':''}${imb.toFixed(4)}</span></div>
+    <div class="sig-row"><span class="sig-name">Cancel rate (orders cancelled)</span><span class="sig-val ${cr>0.35?'vr':'vg'}">${(cr*100).toFixed(1)}%</span></div>
+    <div class="sig-row"><span class="sig-name">Step progress</span><span class="sig-val vb">${obs.step_number} of ${maxSteps}</span></div>`;
+}
+
+function updateNarrative(text){
+  if(!text)return;
+  const c=text
+    .replace(/⚠[^\n]*/g,m=>`<span class="nw">${m}</span>`)
+    .replace(/CRITICAL:[^\n]*/g,m=>`<span class="nd">${m}</span>`)
+    .replace(/✓[^\n]*/g,m=>`<span class="no">${m}</span>`)
+    .replace(/===.*===/g,m=>`<span class="nh">${m}</span>`)
+    .replace(/──.*──/g,m=>`<span class="nh">${m}</span>`);
+  document.getElementById('narrative').innerHTML=c;
+}
+
+function addHist(step,dec,pat,conf,reward,tp){
+  const ok=
+    (dec==='escalate'&&(tp==='spoofing'||tp==='layering'))||
+    (dec==='soft_flag'&&tp==='wash_trading')||
+    (dec==='ignore'&&tp==='none');
+  const cls=reward>=0.6?'correct':reward>=0.2?'partial':'wrong';
+  const rc=reward>=0.6?'rg':reward>=0.2?'rm':'rr';
+  const el=document.createElement('div');
+  el.className='hist-item '+cls;
+  el.innerHTML=`
+    <div class="hist-top">
+      <span class="hist-step">Step ${step.toString().padStart(2,'0')}</span>
+      <span class="hist-rwd ${rc}">${reward>=0?'+':''}${reward.toFixed(4)}</span>
+    </div>
+    <div class="hist-detail">
+      <span class="htag">You: ${dec}</span>
+      <span class="htag">Pattern: ${pat}</span>
+      <span class="htag">Conf: ${(conf*100).toFixed(0)}%</span>
+      <span class="htag">Actual: ${tp}</span>
+      <span class="${ok?'ct':'wt'}">${ok?'✓ Correct!':'✗ Wrong'}</span>
+    </div>`;
+  const list=document.getElementById('hist-list');
+  if(list.querySelector('.empty'))list.innerHTML='';
+  list.insertBefore(el,list.firstChild);
+}
+
+checkServer();
+setInterval(checkServer,8000);
+</script>
+</body>
+</html>
