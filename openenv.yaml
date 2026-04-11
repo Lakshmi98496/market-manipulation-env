@@ -14,7 +14,7 @@ tasks:
   - name: spoofing_detection
     difficulty: easy
     description: Detect spoofing in a clean order book. 15 steps.
-    reward_range: [0.0, 1.0]
+    reward_range: [0.01, 0.99]
     grader:
       type: python
       entrypoint: tasks.graders:grade_easy
@@ -22,7 +22,7 @@ tasks:
   - name: layering_wash_detection
     difficulty: medium
     description: Identify layering and wash trading mixed with HFT noise.
-    reward_range: [0.0, 1.0]
+    reward_range: [0.01, 0.99]
     grader:
       type: python
       entrypoint: tasks.graders:grade_medium
@@ -30,7 +30,7 @@ tasks:
   - name: adaptive_adversary_detection
     difficulty: hard
     description: Track an adaptive manipulator through a regime shift.
-    reward_range: [0.0, 1.0]
+    reward_range: [0.01, 0.99]
     grader:
       type: python
       entrypoint: tasks.graders:grade_hard
