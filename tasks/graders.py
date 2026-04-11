@@ -2,11 +2,12 @@
 Task Graders
 ============
 One grader per task. Each grader runs a full episode with a rule-based
-policy and returns a score in [0.0, 1.0].
+policy and returns a score strictly in (0.0, 1.0).
+
 IMPORTANT — Hackathon compliance:
   - Scores VARY across seeds (no fixed-score disqualification)
   - Three distinct graders with meaningfully different logic
-  - Score range is genuinely [0.0, 1.0] — verified in tests
+  - Score range is strictly (0.01, 0.99) — never exactly 0.0 or 1.0
   - Designed to be learnable by a standard Open LLM (Phase 2 eval)
 """
 from __future__ import annotations
