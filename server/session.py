@@ -30,22 +30,22 @@ TASKS = {
         "difficulty": "easy",
         "max_steps": 15,
         "description": "Detect single-pattern spoofing in a clean order book.",
-        "grader": grade_easy,   # 🔥 FIXED (was string)
-        "reward_range": [0.0, 1.0],
+        "grader": grade_easy,  
+        "reward_range": [0.01, 0.99],
     },
     "layering_wash_detection": {
         "difficulty": "medium",
         "max_steps": 20,
         "description": "Identify layering and wash trading mixed with HFT noise.",
-        "grader": grade_medium,   # 🔥 FIXED
-        "reward_range": [0.0, 1.0],
+        "grader": grade_medium,   
+        "reward_range": [0.01, 0.99],
     },
     "adaptive_adversary_detection": {
         "difficulty": "hard",
         "max_steps": 25,
         "description": "Track an adaptive manipulator through a regime shift.",
-        "grader": grade_hard,   # 🔥 FIXED
-        "reward_range": [0.0, 1.0],
+        "grader": grade_hard,   
+        "reward_range": [0.01, 0.99],
     },
 }
 
