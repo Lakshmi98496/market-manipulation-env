@@ -154,7 +154,7 @@ async def list_tasks():
                 if callable(info.get("grader"))
                 else info.get("grader", "")
             ),
-            "reward_range": info.get("reward_range", [0.0, 1.0]),
+            "reward_range": info.get("reward_range", [0.01, 0.99]),
         })
     return {"tasks": tasks_list}
 
@@ -171,17 +171,6 @@ async def grade_task_endpoint(task_name: str):
     result = grade_task(task_name, seed=42)
     return {
         "task": task_name,
-        "score": result["score"],
-        "success": result["success"],
-        "mean_reward": result["mean_reward"],
-        "steps": result["steps"],
-    }
-
-
-@app.get("/health")
-async def health():
-    return {"status": "ok"}
-: task_name,
         "score": result["score"],
         "success": result["success"],
         "mean_reward": result["mean_reward"],
