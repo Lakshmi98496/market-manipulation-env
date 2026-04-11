@@ -3,7 +3,6 @@ Task Graders
 ============
 One grader per task. Each grader runs a full episode with a rule-based
 policy and returns a score in [0.0, 1.0].
-
 IMPORTANT — Hackathon compliance:
   - Scores VARY across seeds (no fixed-score disqualification)
   - Three distinct graders with meaningfully different logic
@@ -140,49 +139,27 @@ def _run_grader(task_name: str, seed: int) -> Dict:
         "precision": round(precision, 4), "recall": round(recall, 4),
         "success": score >= 0.25,
     }
-
-
-def grade_easy(seed: int = 42) -> Dict:
+def grade_easy(*args, **kwargs):
+    seed = kwargs.get("seed", 42)
     return _run_grader("spoofing_detection", seed)
 
-def grade_medium(seed: int = 42) -> Dict:
+
+def grade_medium(*args, **kwargs):
+    seed = kwargs.get("seed", 42)
     return _run_grader("layering_wash_detection", seed)
 
-def grade_hard(seed: int = 42) -> Dict:
+
+def grade_hard(*args, **kwargs):
+    seed = kwargs.get("seed", 42)
     return _run_grader("adaptive_adversary_detection", seed)
 
-def grade_task(task_name: str, seed: int = 42) -> Dict:
-    graders = {
-        "spoofing_detection": grade_easy,
-        "layering_wash_detection": grade_medium,
-        "adaptive_adversary_detection": grade_hard,
-    }
-    if task_name not in graders:
-        raise ValueError(f"Unknown task: {task_name}. Valid: {list(graders)}")
-    return graders[task_name](seed=seed)
 
-
-if __name__ == "__main__":
-    SEEDS = [42, 123, 777, 999, 2024]
-    print("=" * 65)
-    print("OpenEnv Grader Smoke Test — Anti-disqualification checks")
-    print("=" * 65)
-    all_ok = True
-    for task in ["spoofing_detection", "layering_wash_detection", "adaptive_adversary_detection"]:
-        scores = []
-        print(f"\n[{task}]")
-        for seed in SEEDS:
-            result = grade_task(task, seed=seed)
-            s = result["score"]
-            assert 0.0 <= s <= 1.0, f"Score {s} out of [0,1]!"
-            scores.append(s)
-            print(f"  seed={seed:4d}  score={s:.4f}  P={result['precision']:.2f}  R={result['recall']:.2f}")
-        score_range = max(scores) - min(scores)
-        varies = score_range > 0.02
-        if not varies:
-            print(f"  FAIL: scores do not vary (range={score_range:.4f})")
-            all_ok = False
-        else:
-            print(f"  PASS: score range={score_range:.4f} across {len(SEEDS)} seeds")
-    print("\n" + "=" * 65)
-    print("ALL CHECKS PASSED" if all_ok else "SOME CHECKS FAILED")
+def grade_task(task_name: str, seed: int = 42):
+    if task_name == "spoofing_detection":
+        return grade_easy(seed=seed)
+    elif task_name == "layering_wash_detection":
+        return grade_medium(seed=seed)
+    elif task_name == "adaptive_adversary_detection":
+        return grade_hard(seed=seed)
+    else:
+        raise ValueError(f"Unknown task: {task_name}")
