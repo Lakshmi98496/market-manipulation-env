@@ -7,25 +7,41 @@ from __future__ import annotations
 import asyncio
 import random
 import time
+from contextlib import asynccontextmanager
 from typing import Any, Dict, Optional
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from server.models import ManipulationAction, StepResult
 from server.session import SessionStore, TASKS, DEFAULT_TASK
 from server.reward import compute_reward
 from server.narrative import build_narrative
 
+store = SessionStore()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup: launch session cleanup background task."""
+    async def _cleanup_loop():
+        while True:
+            await asyncio.sleep(300)
+            store.cleanup_stale()
+
+    task = asyncio.create_task(_cleanup_loop())
+    yield
+    task.cancel()
+
+
 app = FastAPI(
     title="Market Manipulation Detection — OpenEnv",
     description="RL environment for detecting spoofing, layering, and wash trading",
     version="2.0.0",
+    lifespan=lifespan,
 )
-
-store = SessionStore()
 
 app.add_middleware(
     CORSMiddleware,
@@ -34,15 +50,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@app.on_event("startup")
-async def start_cleanup():
-    async def _cleanup_loop():
-        while True:
-            await asyncio.sleep(300)
-            store.cleanup_stale()
-    asyncio.create_task(_cleanup_loop())
 
 
 class ResetRequest(BaseModel):
@@ -62,7 +69,10 @@ def _enrich_obs(obs, session_id: str) -> dict:
 
 
 @app.post("/reset")
-async def reset(req: ResetRequest = ResetRequest(), x_session_id: Optional[str] = Header(default=None)):
+async def reset(
+    req: ResetRequest = ResetRequest(),
+    x_session_id: Optional[str] = Header(default=None),
+):
     task = req.task if req.task and req.task in TASKS else DEFAULT_TASK
     seed = req.seed if req.seed is not None else random.randint(0, 999_999)
 
@@ -82,13 +92,19 @@ async def reset(req: ResetRequest = ResetRequest(), x_session_id: Optional[str] 
 
 
 @app.post("/step")
-async def step(req: StepRequest, x_session_id: Optional[str] = Header(default=None)):
+async def step(
+    req: StepRequest,
+    x_session_id: Optional[str] = Header(default=None),
+):
     session = store.get(x_session_id) if x_session_id else store.get_or_create(None)
 
     if session.simulator is None or session.done:
         raise HTTPException(status_code=400, detail="Call /reset first")
 
-    action = ManipulationAction(**req.action)
+    try:
+        action = ManipulationAction(**req.action)
+    except (ValidationError, TypeError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
 
     obs, true_pattern = session.simulator.step(agent_decision=action.decision)
     obs_dict = _enrich_obs(obs, session.session_id)
@@ -121,7 +137,6 @@ async def state(x_session_id: Optional[str] = Header(default=None)):
     session = store.get(x_session_id)
     if session is None or session.simulator is None:
         return {"status": "not_started"}
-
     return {"task": session.task_name, "step": session.step_count}
 
 
@@ -134,7 +149,11 @@ async def list_tasks():
             "difficulty": info["difficulty"],
             "max_steps": info["max_steps"],
             "description": info["description"],
-            "grader": f"tasks.graders.{info.get('grader').__name__}" if callable(info.get("grader")) else info.get("grader", ""),
+            "grader": (
+                f"tasks.graders.{info['grader'].__name__}"
+                if callable(info.get("grader"))
+                else info.get("grader", "")
+            ),
             "reward_range": info.get("reward_range", [0.0, 1.0]),
         })
     return {"tasks": tasks_list}
@@ -143,10 +162,26 @@ async def list_tasks():
 @app.get("/tasks/{task_name}/grade")
 @app.post("/tasks/{task_name}/grade")
 async def grade_task_endpoint(task_name: str):
+    if task_name not in TASKS:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown task '{task_name}'. Valid tasks: {list(TASKS.keys())}",
+        )
     from tasks.graders import grade_task
     result = grade_task(task_name, seed=42)
     return {
         "task": task_name,
+        "score": result["score"],
+        "success": result["success"],
+        "mean_reward": result["mean_reward"],
+        "steps": result["steps"],
+    }
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+: task_name,
         "score": result["score"],
         "success": result["success"],
         "mean_reward": result["mean_reward"],
