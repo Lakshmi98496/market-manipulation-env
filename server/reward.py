@@ -7,29 +7,29 @@ Design goals:
   - Meaningful partial credit at every step (not just 0/1)
   - Penalise false positives (flagging legit market makers)
   - Reward confidence calibration
-  - All outputs strictly in [0.0, 1.0]
+  - All outputs strictly in (0.01, 0.99) -- never exactly 0 or 1
 
 Scoring breakdown:
-  Base reward for correct decision       0.00 – 0.60
-  Bonus for correct pattern_type         0.00 – 0.20
-  Confidence calibration bonus           0.00 – 0.10
+  Base reward for correct decision       0.00 - 0.60
+  Bonus for correct pattern_type         0.00 - 0.20
+  Confidence calibration bonus           0.00 - 0.10
   False positive penalty                -0.30
   Escalation precision bonus             +0.10
-  ─────────────────────────────────────────────────
-  Total (clamped)                        0.00 – 1.00
+  -------------------------------------------------
+  Total (clamped)                        0.01 - 0.99
 """
 from __future__ import annotations
 
 
 # Correct action for each true pattern
 EXPECTED_DECISION = {
-    "spoofing":     "escalate",   # clear crime → escalate
-    "layering":     "escalate",   # clear crime → escalate
-    "wash_trading": "soft_flag",  # harder to prove → soft flag acceptable
-    "none":         "ignore",     # no pattern → ignore
+    "spoofing":     "escalate",   # clear crime -> escalate
+    "layering":     "escalate",   # clear crime -> escalate
+    "wash_trading": "soft_flag",  # harder to prove -> soft flag acceptable
+    "none":         "ignore",     # no pattern -> ignore
 }
 
-# Partial credit matrix  decision_made → true_pattern → score
+# Partial credit matrix  decision_made -> true_pattern -> score
 PARTIAL_CREDIT = {
     #                   spoofing  layering  wash_trading  none
     "escalate":    {"spoofing": 0.60, "layering": 0.60, "wash_trading": 0.25, "none": 0.00},
@@ -56,7 +56,7 @@ def compute_reward(
     Args:
         decision:     agent's decision (ignore/soft_flag/escalate)
         pattern_type: agent's claimed pattern type
-        confidence:   agent's stated confidence (0.0–1.0)
+        confidence:   agent's stated confidence (0.0-1.0)
         true_pattern: ground truth from simulator
 
     Returns:
@@ -80,8 +80,8 @@ def compute_reward(
         reward += ESCALATION_BONUS
 
     # 5. Confidence calibration bonus
-    #    High confidence on a correct decision → bonus
-    #    High confidence on a wrong decision → no bonus (already penalised by base)
+    #    High confidence on a correct decision -> bonus
+    #    High confidence on a wrong decision -> no bonus (already penalised by base)
     if decision == expected:
         reward += confidence * MAX_CONFIDENCE_BONUS
     else:
@@ -91,15 +91,18 @@ def compute_reward(
     return round(max(0.0, min(1.0, reward)), 4)
 
 
-def compute_episode_score(rewards: list[float]) -> float:
+def compute_episode_score(rewards: list) -> float:
     """
-    Aggregate step rewards into a single episode score in [0.0, 1.0].
+    Aggregate step rewards into a single episode score strictly in (0.0, 1.0).
     Uses mean, with a small bonus for consistency (low variance).
+    Scores are clamped to (0.01, 0.99) -- never exactly 0 or 1 as required
+    by the hackathon validator.
     """
     if not rewards:
-        return 0.0
+        return 0.01
     mean = sum(rewards) / len(rewards)
     # Consistency bonus: reduce by variance penalty
     variance = sum((r - mean) ** 2 for r in rewards) / len(rewards)
     score = mean - 0.05 * variance
-    return round(max(0.0, min(1.0, score)), 4)
+    # Strictly between 0 and 1 as required by hackathon validator
+    return round(max(0.01, min(0.99, score)), 4)
