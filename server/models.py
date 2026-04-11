@@ -4,7 +4,7 @@ Defines Action, Observation, and StepResult with full type safety.
 """
 from __future__ import annotations
 from typing import List, Optional, Tuple
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 
 # ---------------------------------------------------------------------------
@@ -34,7 +34,8 @@ class ManipulationAction(BaseModel):
         description="Agent confidence in its decision (0.0–1.0)",
     )
 
-    @validator("decision")
+    @field_validator("decision", mode="before")
+    @classmethod
     def validate_decision(cls, v: str) -> str:
         allowed = {"ignore", "soft_flag", "escalate"}
         v = v.lower().strip()
@@ -42,7 +43,8 @@ class ManipulationAction(BaseModel):
             raise ValueError(f"decision must be one of {allowed}, got '{v}'")
         return v
 
-    @validator("pattern_type")
+    @field_validator("pattern_type", mode="before")
+    @classmethod
     def validate_pattern_type(cls, v: str) -> str:
         allowed = {"spoofing", "layering", "wash_trading", "none"}
         v = v.lower().strip()
