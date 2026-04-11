@@ -21,22 +21,31 @@ from typing import Dict, List, Optional
 from server.simulator import OrderBookSimulator
 from server.reward import compute_episode_score
 
+# 🔥 ONLY ADD THIS LINE
+from tasks.graders import grade_easy, grade_medium, grade_hard
+
 
 TASKS = {
     "spoofing_detection": {
         "difficulty": "easy",
         "max_steps": 15,
         "description": "Detect single-pattern spoofing in a clean order book.",
+        "grader": grade_easy,   # 🔥 FIXED (was string)
+        "reward_range": [0.0, 1.0],
     },
     "layering_wash_detection": {
         "difficulty": "medium",
         "max_steps": 20,
         "description": "Identify layering and wash trading mixed with HFT noise.",
+        "grader": grade_medium,   # 🔥 FIXED
+        "reward_range": [0.0, 1.0],
     },
     "adaptive_adversary_detection": {
         "difficulty": "hard",
         "max_steps": 25,
         "description": "Track an adaptive manipulator through a regime shift.",
+        "grader": grade_hard,   # 🔥 FIXED
+        "reward_range": [0.0, 1.0],
     },
 }
 
