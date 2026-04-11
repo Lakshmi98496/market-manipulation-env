@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import asyncio
 import random
-import time
 from contextlib import asynccontextmanager
 from typing import Any, Dict, Optional
 
@@ -25,12 +24,10 @@ store = SessionStore()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: launch session cleanup background task."""
     async def _cleanup_loop():
         while True:
             await asyncio.sleep(300)
             store.cleanup_stale()
-
     task = asyncio.create_task(_cleanup_loop())
     yield
     task.cancel()
@@ -75,13 +72,10 @@ async def reset(
 ):
     task = req.task if req.task and req.task in TASKS else DEFAULT_TASK
     seed = req.seed if req.seed is not None else random.randint(0, 999_999)
-
     session = store.get_or_create(x_session_id)
     session.reset(task_name=task, seed=seed)
-
     obs = session.simulator.reset(seed=seed)
     obs_dict = _enrich_obs(obs, session.session_id)
-
     return JSONResponse(content={
         "observation": obs_dict,
         "reward": 0.0,
@@ -97,36 +91,29 @@ async def step(
     x_session_id: Optional[str] = Header(default=None),
 ):
     session = store.get(x_session_id) if x_session_id else store.get_or_create(None)
-
     if session.simulator is None or session.done:
         raise HTTPException(status_code=400, detail="Call /reset first")
-
     try:
         action = ManipulationAction(**req.action)
     except (ValidationError, TypeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc))
-
     obs, true_pattern = session.simulator.step(agent_decision=action.decision)
     obs_dict = _enrich_obs(obs, session.session_id)
-
     reward = compute_reward(
         decision=action.decision,
         pattern_type=action.pattern_type,
         confidence=action.confidence,
         true_pattern=true_pattern,
     )
-
     session.step_count += 1
     done = session.step_count >= session.max_steps
     session.done = done
-
     result = StepResult(
         observation=obs,
         reward=reward,
         done=done,
         true_pattern=true_pattern,
     )
-
     result_dict = result.dict()
     result_dict["observation"] = obs_dict
     return JSONResponse(content=result_dict)
@@ -150,7 +137,7 @@ async def list_tasks():
             "max_steps": info["max_steps"],
             "description": info["description"],
             "grader": (
-                f"tasks.graders.{info['grader'].__name__}"
+                f"tasks.graders:{info['grader'].__name__}"
                 if callable(info.get("grader"))
                 else info.get("grader", "")
             ),
