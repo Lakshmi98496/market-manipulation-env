@@ -134,10 +134,12 @@ async def list_tasks():
             "difficulty": info["difficulty"],
             "max_steps": info["max_steps"],
             "description": info["description"],
-            "grader": info.get("grader", ""),
+            "grader": f"tasks.graders.{info.get('grader').__name__}" if callable(info.get("grader")) else info.get("grader", ""),
             "reward_range": info.get("reward_range", [0.0, 1.0]),
         })
     return {"tasks": tasks_list}
+
+
 @app.get("/tasks/{task_name}/grade")
 @app.post("/tasks/{task_name}/grade")
 async def grade_task_endpoint(task_name: str):
