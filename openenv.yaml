@@ -1,96 +1,43 @@
-name: market-manipulation-env
-version: "1.0.0"
+id: market-manipulation-env-v1
+name: Market Manipulation Detection
+version: 1.0.0
+type: environment
+sdk: openenv
 description: >
   A real-world RL environment where an AI agent monitors a simulated live
-  order book, detects suspicious trading patterns (spoofing, layering,
-  wash trading), and decides whether to ignore, soft-flag, or escalate
-  each event. Mirrors actual surveillance systems used by SEC/SEBI.
-
-author: "your-hf-username"
-license: MIT
-
-environment:
-  entry_point: server/env.py
-  class: MarketManipulationEnv
-
-action_space:
-  type: object
-  fields:
-    decision:
-      type: string
-      enum: [ignore, soft_flag, escalate]
-      description: "Agent's ruling on the current order book event"
-    pattern_type:
-      type: string
-      enum: [spoofing, layering, wash_trading, none]
-      description: "Detected manipulation pattern, or none"
-    confidence:
-      type: float
-      min: 0.0
-      max: 1.0
-      description: "Agent confidence in its decision (0.0–1.0)"
-
-observation_space:
-  type: object
-  fields:
-    bid_levels:
-      type: array
-      description: "Top 5 bid price/size pairs for last 10 ticks"
-    ask_levels:
-      type: array
-      description: "Top 5 ask price/size pairs for last 10 ticks"
-    trade_tape:
-      type: array
-      description: "Last 20 trades: price, size, side, timestamp"
-    order_imbalance:
-      type: float
-      description: "Bid volume minus ask volume ratio"
-    cancel_rate:
-      type: float
-      description: "Order cancellation rate in last 30s"
-    spread:
-      type: float
-      description: "Current bid-ask spread"
-    mid_price:
-      type: float
-      description: "Current mid price"
-    step_number:
-      type: int
-      description: "Current step in episode"
-    task_name:
-      type: string
-      description: "Active task identifier"
-    context_hint:
-      type: string
-      description: "Natural language description of what the agent sees"
-
+  order book and detects market manipulation patterns including spoofing,
+  layering, and wash trading. Mirrors SEC/SEBI surveillance systems.
+entrypoint: server.app:app
+author: Lakshmi98496
+ 
 tasks:
   - name: spoofing_detection
     difficulty: easy
-    description: >
-      Single manipulator places large phantom bids/asks to move price,
-      then cancels them before execution. Clean, high-amplitude signal.
-    max_steps: 15
+    description: Detect spoofing in a clean order book. 15 steps.
     reward_range: [0.0, 1.0]
+    grader:
+      type: python
+      entrypoint: tasks.graders:grade_easy
 
   - name: layering_wash_detection
     difficulty: medium
-    description: >
-      Two simultaneous patterns — layering and wash trading — mixed
-      with legitimate HFT noise. Agent must triage and classify correctly.
-    max_steps: 20
+    description: Identify layering and wash trading mixed with HFT noise.
     reward_range: [0.0, 1.0]
+    grader:
+      type: python
+      entrypoint: tasks.graders:grade_medium
 
   - name: adaptive_adversary_detection
     difficulty: hard
-    description: >
-      An adaptive adversarial manipulator shifts strategy based on the
-      agent's past flags. Mid-episode market regime switch. High false-
-      positive risk from legitimate market-maker activity.
-    max_steps: 25
+    description: Track an adaptive manipulator through a regime shift.
     reward_range: [0.0, 1.0]
-
+    grader:
+      type: python
+      entrypoint: tasks.graders:grade_hard
+ 
 endpoints:
   reset: POST /reset
   step: POST /step
   state: GET /state
+  tasks: GET /tasks
+  grade: POST /tasks/{task_name}/grade
