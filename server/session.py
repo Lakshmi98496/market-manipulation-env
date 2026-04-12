@@ -11,6 +11,7 @@ wrong scores.
 
 This module provides thread-safe, per-session isolation.
 """
+"""Session Manager - per-session state store."""
 from __future__ import annotations
 
 import threading
@@ -21,41 +22,36 @@ from typing import Dict, List, Optional
 from server.simulator import OrderBookSimulator
 from server.reward import compute_episode_score
 
-# 🔥 ONLY ADD THIS LINE
-from tasks.graders import grade_easy, grade_medium, grade_hard
-
 
 TASKS = {
     "spoofing_detection": {
         "difficulty": "easy",
         "max_steps": 15,
         "description": "Detect single-pattern spoofing in a clean order book.",
-        "grader": grade_easy,  
+        "grader": "tasks.graders.grade_easy",
         "reward_range": [0.01, 0.99],
     },
     "layering_wash_detection": {
         "difficulty": "medium",
         "max_steps": 20,
         "description": "Identify layering and wash trading mixed with HFT noise.",
-        "grader": grade_medium,   
+        "grader": "tasks.graders.grade_medium",
         "reward_range": [0.01, 0.99],
     },
     "adaptive_adversary_detection": {
         "difficulty": "hard",
         "max_steps": 25,
         "description": "Track an adaptive manipulator through a regime shift.",
-        "grader": grade_hard,   
+        "grader": "tasks.graders.grade_hard",
         "reward_range": [0.01, 0.99],
     },
 }
 
 DEFAULT_TASK = "spoofing_detection"
-SESSION_TTL_SECONDS = 3600  # clean up stale sessions after 1 hour
+SESSION_TTL_SECONDS = 3600
 
 
 class EpisodeSession:
-    """Isolated state for a single agent episode."""
-
     def __init__(self, session_id: str):
         self.session_id = session_id
         self.task_name: str = DEFAULT_TASK
@@ -95,14 +91,6 @@ class EpisodeSession:
 
 
 class SessionStore:
-    """
-    Thread-safe store of active EpisodeSessions.
-
-    Each HTTP request carries a session_id header (or cookie).
-    If absent, a new session is created automatically — this keeps
-    backward compatibility with the single-agent validation script.
-    """
-
     def __init__(self):
         self._sessions: Dict[str, EpisodeSession] = {}
         self._lock = threading.Lock()
@@ -110,14 +98,13 @@ class SessionStore:
     def get_or_create(self, session_id: Optional[str] = None) -> EpisodeSession:
         with self._lock:
             if session_id and session_id in self._sessions:
-                session = self._sessions[session_id]
-                session.touch()
-                return session
-            # Create new session
+                s = self._sessions[session_id]
+                s.touch()
+                return s
             new_id = session_id or str(uuid.uuid4())
-            session = EpisodeSession(new_id)
-            self._sessions[new_id] = session
-            return session
+            s = EpisodeSession(new_id)
+            self._sessions[new_id] = s
+            return s
 
     def get(self, session_id: str) -> Optional[EpisodeSession]:
         with self._lock:
@@ -131,11 +118,10 @@ class SessionStore:
             self._sessions.pop(session_id, None)
 
     def cleanup_stale(self) -> int:
-        """Remove sessions inactive for SESSION_TTL_SECONDS. Returns count removed."""
         with self._lock:
-            stale = [sid for sid, s in self._sessions.items() if s.is_stale()]
-            for sid in stale:
-                del self._sessions[sid]
+            stale = [k for k, v in self._sessions.items() if v.is_stale()]
+            for k in stale:
+                del self._sessions[k]
             return len(stale)
 
     @property
@@ -144,5 +130,4 @@ class SessionStore:
             return len(self._sessions)
 
 
-# Module-level singleton — one store for the whole server process
 store = SessionStore()
