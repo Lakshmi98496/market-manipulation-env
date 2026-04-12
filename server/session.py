@@ -1,16 +1,3 @@
-"""
-Session Manager
-===============
-Replaces the dangerous module-level global _episode with a proper
-per-session state store keyed by session_id.
-
-The hackathon harness (Phase 2) runs multiple concurrent episodes —
-one per agent instance. A global state object causes all sessions to
-share and overwrite each other's episode data, producing silent
-wrong scores.
-
-This module provides thread-safe, per-session isolation.
-"""
 """Session Manager - per-session state store."""
 from __future__ import annotations
 
