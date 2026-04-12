@@ -1,41 +1,30 @@
-"""Market Manipulation Detection - OpenEnv Environment"""
+"""
+Market Manipulation Detection — OpenEnv Environment
+====================================================
+"""
 from __future__ import annotations
 
 import asyncio
 import random
-from contextlib import asynccontextmanager
 from typing import Any, Dict, Optional
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 
 from server.models import ManipulationAction, StepResult
 from server.session import SessionStore, TASKS, DEFAULT_TASK
 from server.reward import compute_reward
 from server.narrative import build_narrative
 
-store = SessionStore()
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    async def _cleanup_loop():
-        while True:
-            await asyncio.sleep(300)
-            store.cleanup_stale()
-    task = asyncio.create_task(_cleanup_loop())
-    yield
-    task.cancel()
-
-
 app = FastAPI(
-    title="Market Manipulation Detection - OpenEnv",
+    title="Market Manipulation Detection — OpenEnv",
     description="RL environment for detecting spoofing, layering, and wash trading",
     version="2.0.0",
-    lifespan=lifespan,
 )
+
+store = SessionStore()
 
 app.add_middleware(
     CORSMiddleware,
@@ -44,6 +33,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+async def start_cleanup():
+    async def _cleanup_loop():
+        while True:
+            await asyncio.sleep(300)
+            store.cleanup_stale()
+
+    asyncio.create_task(_cleanup_loop())
 
 
 class ResetRequest(BaseModel):
@@ -62,86 +61,17 @@ def _enrich_obs(obs, session_id: str) -> dict:
     return d
 
 
-# ── Required OpenEnv runtime endpoints ──────────────────────────────────────
-
-@app.get("/health")
-async def health():
-    return {"status": "healthy"}
-
-
-@app.get("/metadata")
-async def metadata():
-    return {
-        "name": "Market Manipulation Detection",
-        "description": (
-            "RL environment where an agent monitors a simulated order book "
-            "and detects spoofing, layering, and wash trading patterns."
-        ),
-        "version": "2.0.0",
-        "tasks": list(TASKS.keys()),
-    }
-
-
-@app.get("/schema")
-async def schema():
-    return {
-        "action": {
-            "type": "object",
-            "properties": {
-                "decision": {"type": "string", "enum": ["ignore", "soft_flag", "escalate"]},
-                "pattern_type": {"type": "string", "enum": ["none", "spoofing", "layering", "wash_trading"]},
-                "confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
-            },
-            "required": ["decision", "pattern_type", "confidence"],
-        },
-        "observation": {
-            "type": "object",
-            "properties": {
-                "order_imbalance": {"type": "number"},
-                "cancel_rate": {"type": "number"},
-                "spread": {"type": "number"},
-                "trade_tape": {"type": "array"},
-                "context_hint": {"type": "string"},
-                "session_id": {"type": "string"},
-            },
-        },
-        "state": {
-            "type": "object",
-            "properties": {
-                "task": {"type": "string"},
-                "step": {"type": "integer"},
-                "done": {"type": "boolean"},
-            },
-        },
-    }
-
-
-@app.post("/mcp")
-async def mcp_endpoint(request: dict = None):
-    """MCP JSON-RPC endpoint required by OpenEnv runtime validator."""
-    return {
-        "jsonrpc": "2.0",
-        "id": None,
-        "result": {
-            "name": "Market Manipulation Detection",
-            "version": "2.0.0",
-        },
-    }
-
-
-# ── Simulation endpoints ─────────────────────────────────────────────────────
-
 @app.post("/reset")
-async def reset(
-    req: ResetRequest = ResetRequest(),
-    x_session_id: Optional[str] = Header(default=None),
-):
+async def reset(req: ResetRequest = ResetRequest(), x_session_id: Optional[str] = Header(default=None)):
     task = req.task if req.task and req.task in TASKS else DEFAULT_TASK
     seed = req.seed if req.seed is not None else random.randint(0, 999_999)
+
     session = store.get_or_create(x_session_id)
     session.reset(task_name=task, seed=seed)
+
     obs = session.simulator.reset(seed=seed)
     obs_dict = _enrich_obs(obs, session.session_id)
+
     return JSONResponse(content={
         "observation": obs_dict,
         "reward": 0.0,
@@ -152,34 +82,35 @@ async def reset(
 
 
 @app.post("/step")
-async def step(
-    req: StepRequest,
-    x_session_id: Optional[str] = Header(default=None),
-):
+async def step(req: StepRequest, x_session_id: Optional[str] = Header(default=None)):
     session = store.get(x_session_id) if x_session_id else store.get_or_create(None)
+
     if session.simulator is None or session.done:
         raise HTTPException(status_code=400, detail="Call /reset first")
-    try:
-        action = ManipulationAction(**req.action)
-    except (ValidationError, TypeError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+
+    action = ManipulationAction(**req.action)
+
     obs, true_pattern = session.simulator.step(agent_decision=action.decision)
     obs_dict = _enrich_obs(obs, session.session_id)
+
     reward = compute_reward(
         decision=action.decision,
         pattern_type=action.pattern_type,
         confidence=action.confidence,
         true_pattern=true_pattern,
     )
+
     session.step_count += 1
     done = session.step_count >= session.max_steps
     session.done = done
+
     result = StepResult(
         observation=obs,
         reward=reward,
         done=done,
         true_pattern=true_pattern,
     )
+
     result_dict = result.dict()
     result_dict["observation"] = obs_dict
     return JSONResponse(content=result_dict)
@@ -190,10 +121,9 @@ async def state(x_session_id: Optional[str] = Header(default=None)):
     session = store.get(x_session_id)
     if session is None or session.simulator is None:
         return {"status": "not_started"}
+
     return {"task": session.task_name, "step": session.step_count}
 
-
-# ── Task / grader endpoints ──────────────────────────────────────────────────
 
 @app.get("/tasks")
 async def list_tasks():
@@ -201,11 +131,9 @@ async def list_tasks():
     for name, info in TASKS.items():
         tasks_list.append({
             "name": name,
-            "difficulty": info["difficulty"],
             "max_steps": info["max_steps"],
-            "description": info["description"],
             "grader": info.get("grader", ""),
-            "reward_range": info.get("reward_range", [0.01, 0.99]),
+            "reward_range": info.get("reward_range", [0, 1]),
         })
     return {"tasks": tasks_list}
 
@@ -213,19 +141,19 @@ async def list_tasks():
 @app.get("/tasks/{task_name}/grade")
 @app.post("/tasks/{task_name}/grade")
 async def grade_task_endpoint(task_name: str):
-    if task_name not in TASKS:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Unknown task '{task_name}'. Valid: {list(TASKS.keys())}",
-        )
     from tasks.graders import grade_task
-    result = grade_task(task_name, seed=42)
-   score = grade_task(task_name, seed=42)
 
-return {
-    "task": task_name,
-    "score": score,
-    "success": score >= 0.25,
-    "mean_reward": score,
-    "steps": 0,
-}
+    result = grade_task(task_name, seed=42)
+
+    return {
+        "task": task_name,
+        "score": result["score"],
+        "success": result["success"],
+        "mean_reward": result["mean_reward"],
+        "steps": result["steps"],
+    }
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
