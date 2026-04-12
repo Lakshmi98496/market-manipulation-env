@@ -3,12 +3,6 @@ Task Graders
 ============
 One grader per task. Each grader runs a full episode with a rule-based
 policy and returns a score strictly in (0.01, 0.99).
-
-Hackathon compliance:
-  - Scores VARY across seeds
-  - Three distinct graders with different logic
-  - Score strictly between 0 and 1 (not 0.0, not 1.0)
-  - Functions have explicit signature: grade_X(seed: int = 42)
 """
 from __future__ import annotations
 
@@ -52,8 +46,7 @@ def _policy_medium(obs_dict: dict, rng: random.Random) -> Tuple[str, str, float]
     return "ignore", "none", 0.80
 
 
-def _policy_hard(obs_dict: dict, step: int, rng: random.Random,
-                 regime_switched: bool) -> Tuple[str, str, float]:
+def _policy_hard(obs_dict: dict, step: int, rng: random.Random, regime_switched: bool) -> Tuple[str, str, float]:
     imbalance   = obs_dict.get("order_imbalance", 0.0)
     cancel_rate = obs_dict.get("cancel_rate", 0.0)
     context     = obs_dict.get("context_hint", "")
@@ -63,23 +56,29 @@ def _policy_hard(obs_dict: dict, step: int, rng: random.Random,
     imbalance_thresh = 0.55 if in_volatile else 0.38
     sizes = [t.get("size", 0) for t in tape[:8]] if tape else []
     wash_signal = sum(sizes.count(s) >= 2 for s in set(sizes)) >= 2 if sizes else False
+
     if wash_signal and not in_volatile:
         conf = 0.60 + rng.uniform(-0.1, 0.1)
         return "soft_flag", "wash_trading", max(0.1, min(0.9, conf))
+
     if cancel_rate > cancel_thresh and abs(imbalance) > imbalance_thresh:
         pattern = "spoofing" if step < 12 else rng.choice(["layering", "spoofing"])
         conf = 0.65 + rng.uniform(-0.15, 0.10)
         return "escalate", pattern, max(0.1, min(0.9, conf))
+
     if abs(imbalance) > 0.60 and not in_volatile:
         return "soft_flag", "layering", 0.50
+
     if rng.random() < 0.06:
         return "soft_flag", rng.choice(["spoofing", "layering"]), 0.25
+
     return "ignore", "none", 0.85
 
 
 def _run_grader(task_name: str, seed: int) -> Dict:
     rng = random.Random(seed + 7)
     sim = OrderBookSimulator(task_name=task_name, seed=seed)
+
     max_steps = {
         "spoofing_detection": 15,
         "layering_wash_detection": 20,
@@ -88,12 +87,11 @@ def _run_grader(task_name: str, seed: int) -> Dict:
 
     obs = sim.reset(seed=seed)
     rewards: List[float] = []
-    decisions: List[str] = []
-    true_patterns: List[str] = []
     regime_switched = False
 
     for step in range(1, max_steps + 1):
         obs_dict = obs.dict()
+
         if "volatile" in obs_dict.get("context_hint", ""):
             regime_switched = True
 
@@ -105,29 +103,26 @@ def _run_grader(task_name: str, seed: int) -> Dict:
             decision, pattern_type, confidence = _policy_hard(obs_dict, step, rng, regime_switched)
 
         obs, true_pattern = sim.step(agent_decision=decision)
+
         reward = compute_reward(
             decision=decision,
             pattern_type=pattern_type,
             confidence=confidence,
             true_pattern=true_pattern,
         )
+
         rewards.append(reward)
-        decisions.append(decision)
-        true_patterns.append(true_pattern)
 
     score = compute_episode_score(rewards)
 
     return {
         "task": task_name,
-        "seed": seed,
         "score": score,
         "mean_reward": round(sum(rewards) / len(rewards), 4) if rewards else 0.01,
         "steps": len(rewards),
         "success": score >= 0.25,
     }
 
-
-# 🔥 FIXED PART (only return float)
 
 def grade_easy(seed: int = 42) -> float:
     return _run_grader("spoofing_detection", seed)["score"]
