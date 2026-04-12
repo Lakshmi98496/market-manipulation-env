@@ -1,7 +1,4 @@
-"""
-Market Manipulation Detection — OpenEnv Environment
-====================================================
-"""
+"""Market Manipulation Detection - OpenEnv Environment"""
 from __future__ import annotations
 
 import asyncio
@@ -34,7 +31,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Market Manipulation Detection — OpenEnv",
+    title="Market Manipulation Detection - OpenEnv",
     description="RL environment for detecting spoofing, layering, and wash trading",
     version="2.0.0",
     lifespan=lifespan,
@@ -136,11 +133,7 @@ async def list_tasks():
             "difficulty": info["difficulty"],
             "max_steps": info["max_steps"],
             "description": info["description"],
-            "grader": (
-                f"tasks.graders:{info['grader'].__name__}"
-                if callable(info.get("grader"))
-                else info.get("grader", "")
-            ),
+            "grader": info.get("grader", ""),
             "reward_range": info.get("reward_range", [0.01, 0.99]),
         })
     return {"tasks": tasks_list}
@@ -152,7 +145,7 @@ async def grade_task_endpoint(task_name: str):
     if task_name not in TASKS:
         raise HTTPException(
             status_code=404,
-            detail=f"Unknown task '{task_name}'. Valid tasks: {list(TASKS.keys())}",
+            detail=f"Unknown task '{task_name}'. Valid: {list(TASKS.keys())}",
         )
     from tasks.graders import grade_task
     result = grade_task(task_name, seed=42)
