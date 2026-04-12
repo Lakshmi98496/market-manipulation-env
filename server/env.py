@@ -62,6 +62,75 @@ def _enrich_obs(obs, session_id: str) -> dict:
     return d
 
 
+# ── Required OpenEnv runtime endpoints ──────────────────────────────────────
+
+@app.get("/health")
+async def health():
+    return {"status": "healthy"}
+
+
+@app.get("/metadata")
+async def metadata():
+    return {
+        "name": "Market Manipulation Detection",
+        "description": (
+            "RL environment where an agent monitors a simulated order book "
+            "and detects spoofing, layering, and wash trading patterns."
+        ),
+        "version": "2.0.0",
+        "tasks": list(TASKS.keys()),
+    }
+
+
+@app.get("/schema")
+async def schema():
+    return {
+        "action": {
+            "type": "object",
+            "properties": {
+                "decision": {"type": "string", "enum": ["ignore", "soft_flag", "escalate"]},
+                "pattern_type": {"type": "string", "enum": ["none", "spoofing", "layering", "wash_trading"]},
+                "confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+            },
+            "required": ["decision", "pattern_type", "confidence"],
+        },
+        "observation": {
+            "type": "object",
+            "properties": {
+                "order_imbalance": {"type": "number"},
+                "cancel_rate": {"type": "number"},
+                "spread": {"type": "number"},
+                "trade_tape": {"type": "array"},
+                "context_hint": {"type": "string"},
+                "session_id": {"type": "string"},
+            },
+        },
+        "state": {
+            "type": "object",
+            "properties": {
+                "task": {"type": "string"},
+                "step": {"type": "integer"},
+                "done": {"type": "boolean"},
+            },
+        },
+    }
+
+
+@app.post("/mcp")
+async def mcp_endpoint(request: dict = None):
+    """MCP JSON-RPC endpoint required by OpenEnv runtime validator."""
+    return {
+        "jsonrpc": "2.0",
+        "id": None,
+        "result": {
+            "name": "Market Manipulation Detection",
+            "version": "2.0.0",
+        },
+    }
+
+
+# ── Simulation endpoints ─────────────────────────────────────────────────────
+
 @app.post("/reset")
 async def reset(
     req: ResetRequest = ResetRequest(),
@@ -124,6 +193,8 @@ async def state(x_session_id: Optional[str] = Header(default=None)):
     return {"task": session.task_name, "step": session.step_count}
 
 
+# ── Task / grader endpoints ──────────────────────────────────────────────────
+
 @app.get("/tasks")
 async def list_tasks():
     tasks_list = []
@@ -156,8 +227,3 @@ async def grade_task_endpoint(task_name: str):
         "mean_reward": result["mean_reward"],
         "steps": result["steps"],
     }
-
-
-@app.get("/health")
-async def health():
-    return {"status": "ok"}
