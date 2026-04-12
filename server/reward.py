@@ -87,10 +87,7 @@ def compute_reward(
     else:
         # Penalise over-confident wrong answers
         reward -= (confidence - 0.5) * 0.05 if confidence > 0.5 else 0.0
-
-    return round(max(0.0, min(1.0, reward)), 4)
-
-
+    return round(max(0.01, min(0.99, reward)), 4)
 def compute_episode_score(rewards: list) -> float:
     """
     Aggregate step rewards into a single episode score strictly in (0.0, 1.0).
