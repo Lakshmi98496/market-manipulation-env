@@ -113,6 +113,7 @@ async def step(req: StepRequest, x_session_id: Optional[str] = Header(default=No
 
     result_dict = result.dict()
     result_dict["observation"] = obs_dict
+
     return JSONResponse(content=result_dict)
 
 
@@ -122,7 +123,10 @@ async def state(x_session_id: Optional[str] = Header(default=None)):
     if session is None or session.simulator is None:
         return {"status": "not_started"}
 
-    return {"task": session.task_name, "step": session.step_count}
+    return {
+        "task": session.task_name,
+        "step": session.step_count,
+    }
 
 
 @app.get("/tasks")
@@ -136,21 +140,19 @@ async def list_tasks():
             "reward_range": info.get("reward_range", [0, 1]),
         })
     return {"tasks": tasks_list}
-
-
 @app.get("/tasks/{task_name}/grade")
 @app.post("/tasks/{task_name}/grade")
 async def grade_task_endpoint(task_name: str):
     from tasks.graders import grade_task
 
-    result = grade_task(task_name, seed=42)
+    score = grade_task(task_name, seed=42)
 
     return {
         "task": task_name,
-        "score": result["score"],
-        "success": result["success"],
-        "mean_reward": result["mean_reward"],
-        "steps": result["steps"],
+        "score": score,
+        "success": score >= 0.25,
+        "mean_reward": score,
+        "steps": 0,
     }
 
 
