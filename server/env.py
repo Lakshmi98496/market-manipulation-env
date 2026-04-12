@@ -220,10 +220,12 @@ async def grade_task_endpoint(task_name: str):
         )
     from tasks.graders import grade_task
     result = grade_task(task_name, seed=42)
-    return {
-        "task": task_name,
-        "score": result["score"],
-        "success": result["success"],
-        "mean_reward": result["mean_reward"],
-        "steps": result["steps"],
-    }
+   score = grade_task(task_name, seed=42)
+
+return {
+    "task": task_name,
+    "score": score,
+    "success": score >= 0.25,
+    "mean_reward": score,
+    "steps": 0,
+}
