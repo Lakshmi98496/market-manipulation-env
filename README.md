@@ -184,3 +184,5 @@ This environment models the exact decision problem faced by:
 The three manipulation patterns (spoofing, layering, wash trading) are
 all **illegal** under the Securities Exchange Act and SEBI regulations,
 and detecting them in real-time is an active area of fintech AI research.
+This is demo project used for learning git
+#Git
